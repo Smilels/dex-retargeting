@@ -21,6 +21,7 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
     RetargetingConfig.set_default_urdf_dir(str(robot_dir))
     logger.info(f"Start retargeting with config {config_path}")
     retargeting = RetargetingConfig.load_from_file(config_path).build()
+    print(config_path)
 
     hand_type = "Right" if "right" in config_path.lower() else "Left"
     detector = SingleHandDetector(hand_type=hand_type, selfie=False)
@@ -101,8 +102,13 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
 
     # Different robot loader may have different orders for joints
     sapien_joint_names = [joint.get_name() for joint in robot.get_active_joints()]
+    # sapien_joint_names: 
     retargeting_joint_names = retargeting.joint_names
     retargeting_to_sapien = np.array([retargeting_joint_names.index(name) for name in sapien_joint_names]).astype(int)
+    print(sapien_joint_names, retargeting_joint_names,retargeting_to_sapien, )
+    #['joint_0.0', 'joint_4.0', 'joint_8.0', 'joint_12.0', 'joint_1.0', 'joint_5.0', 'joint_9.0', 'joint_13.0', 'joint_2.0', 'joint_6.0', 'joint_10.0', 'joint_14.0', 'joint_3.0', 'joint_7.0', 'joint_11.0', 'joint_15.0'] 
+    #['joint_0.0', 'joint_1.0', 'joint_2.0', 'joint_3.0', 'joint_12.0', 'joint_13.0', 'joint_14.0', 'joint_15.0', 'joint_4.0', 'joint_5.0', 'joint_6.0', 'joint_7.0', 'joint_8.0', 'joint_9.0', 'joint_10.0', 'joint_11.0'] 
+    #[ 0  8 12  4  1  9 13  5  2 10 14  6  3 11 15  7]
 
     while True:
         try:
@@ -110,13 +116,16 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
         except Empty:
             logger.error(f"Fail to fetch image from camera in 5 secs. Please check your web camera device.")
             return
-
+	
         _, joint_pos, _, _ = detector.detect(rgb)
+        # print(joint_pos.shape)# (21, 3)
         if joint_pos is None:
             logger.warning(f"{hand_type} hand is not detected.")
         else:
             retargeting_type = retargeting.optimizer.retargeting_type
             indices = retargeting.optimizer.target_link_human_indices
+            print(joint_pos)
+            # indices: shadow (2, 15) allegro (2, 10)
             if retargeting_type == "POSITION":
                 indices = indices
                 ref_value = joint_pos[indices, :]
@@ -124,7 +133,10 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
                 origin_indices = indices[0, :]
                 task_indices = indices[1, :]
                 ref_value = joint_pos[task_indices, :] - joint_pos[origin_indices, :]
+            #ref_value: shadow (15, 3) allegro (10, 3)
+
             qpos = retargeting.retarget(ref_value)
+            #qpos (24,) allegro (16,)
             robot.set_qpos(qpos[retargeting_to_sapien])
 
         for _ in range(2):
@@ -133,7 +145,7 @@ def start_retargeting(queue: multiprocessing.Queue, robot_dir: str, config_path:
 
 def produce_frame(queue: multiprocessing.Queue, camera_path: Optional[str] = None):
     if camera_path is None:
-        cap = cv2.VideoCapture(4)
+        cap = cv2.VideoCapture(-1)
     else:
         cap = cv2.VideoCapture(camera_path)
 
