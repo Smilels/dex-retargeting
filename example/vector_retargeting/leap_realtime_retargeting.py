@@ -56,7 +56,10 @@ def estimate_frame_from_hand_points(keypoint_3d_array: np.ndarray):
 
 def Vector2Numpy(vector):
     return np.array([vector.x, vector.y,vector.z])
-        
+
+def Quaternion2Numpy(vector):
+    return np.array([vector.x, vector.y,vector.z,vector.w])
+    
 def map(event):
     global target_pos
     hand = event.hands[0]
@@ -102,6 +105,9 @@ def map(event):
     # # joint_pos[:, 2] *= -1
     target_pos= np.matmul(r2,np.matmul(joint_pos,r1).T).T
     print(target_pos[1])
+    wrist_rotation = Quaternion2Numpy(hand.arm.rotation)
+    # wrist position and rotation
+    wrist = np.concatenate((joint_pos[0], wrist_rotation), axis=None)
     # time.sleep(1 / 30.0)
 
 
